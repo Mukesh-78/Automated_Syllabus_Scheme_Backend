@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const {
   updateCourseDetails,
+  updateLabCourseDetails,
   getCourse,
   getCourseDetails,
   addMapping,
@@ -18,6 +19,7 @@ const {
 
 // Define routes
 router.post("/updateCourseDetails", updateCourseDetails);
+router.post("/updateLabCourseDetails", updateLabCourseDetails);
 router.get("/getCourse", getCourse);
 router.get("/getCourseDetails", getCourseDetails);
 router.post("/addMapping", addMapping);
