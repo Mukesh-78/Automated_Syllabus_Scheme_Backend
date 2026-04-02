@@ -148,37 +148,36 @@ const updateCourseDetails = async (req, res) => {
 
     // Delete all existing textbooks for this course (match ALL composite key parts)
     if (existingTextbooks && existingTextbooks.length > 0) {
-      for (const book of existingTextbooks) {
-        await supabase
-          .from("textbooks")
-          .delete()
-          .match({ 
-            id: book.id, 
-            course_name: book.course_name, 
-            degree: book.degree, 
-            department: book.department 
-          });
-      }
+      await supabase
+        .from("textbooks")
+        .delete()
+        .match({
+          course_name: courseName,
+          degree: degree,
+          department: department,
+      });
     }
+
+    await supabase.rpc("reset_textbooks_sequence");
 
     // Insert new textbooks with fresh sequential IDs starting from 1
     if (Array.isArray(textbooks) && textbooks.length > 0) {
-      const textbookData = textbooks.map((t, index) => ({
-        id: index + 1, // Sequential ID starting from 1
+      const textbookData = textbooks.map((t) => ({
         course_name: courseName,
         course_code: courseCode,
         degree: degree,
         department: department,
-        title: t.title || "Unknown Title",
-        author: t.author || "Unknown Author",
-        publisher: t.publisher || "N/A",
-        place: t.place || "N/A",
-        year: t.year || "N/A",
+        title: t.title || null,
+        author: t.author || null,
+        publisher: t.publisher || null,
+        place: t.place || null,
+        year: t.year || null,
       }));
 
       const { error: textbookError } = await supabase
         .from("textbooks")
-        .insert(textbookData);
+        .insert(textbookData)
+        .select();
       
       if (textbookError) {
         console.error("❌ Error inserting textbooks:", textbookError);
@@ -196,37 +195,36 @@ const updateCourseDetails = async (req, res) => {
 
     // Delete all existing references for this course (match ALL composite key parts)
     if (existingRefs && existingRefs.length > 0) {
-      for (const ref of existingRefs) {
-        await supabase
-          .from("refs")
-          .delete()
-          .match({ 
-            id: ref.id, 
-            course_name: ref.course_name, 
-            degree: ref.degree, 
-            department: ref.department 
-          });
-      }
+      await supabase
+      .from("refs")
+      .delete()
+      .match({
+        course_name: courseName,
+        degree: degree,
+        department: department,
+      });
     }
 
+    await supabase.rpc("reset_refs_sequence");
+    
     // Insert new references with fresh sequential IDs starting from 1
     if (Array.isArray(references) && references.length > 0) {
-      const referenceData = references.map((r, index) => ({
-        id: index + 1, // Sequential ID starting from 1
+      const referenceData = references.map((r) => ({
         course_name: courseName,
         course_code: courseCode,
         degree: degree,
         department: department,
-        title: r.title || "Unknown Title",
-        author: r.author || "Unknown Author",
-        publisher: r.publisher || "N/A",
-        place: r.place || "N/A",
-        year: r.year || "N/A",
+        title: r.title || null,
+        author: r.author || null,
+        publisher: r.publisher || null,
+        place: r.place || null,
+        year: r.year || null,
       }));
-
+      
       const { error: referenceError } = await supabase
         .from("refs")
-        .insert(referenceData);
+        .insert(referenceData)
+        .select();
       
       if (referenceError) {
         console.error("❌ Error inserting references:", referenceError);
@@ -491,8 +489,67 @@ const getAllMappings = async (req, res) => {
   }
 };
 
+const updateLabCourseDetails = async (req, res) => {
+  try {
+    const {
+      courseName,
+      degree,
+      department,
+      description,
+    } = req.body;
+
+    //Check if record exists
+    const { data: existingLab, error: fetchError } = await supabase
+      .from("labcourse_details")
+      .select("course_name")
+      .eq("course_name", courseName)
+      .eq("degree", degree)
+      .eq("department", department);
+
+    if (fetchError) {
+      console.error("❌ Fetch error:", fetchError);
+      return res
+        .status(500)
+        .json({ success: false, error: fetchError.message });
+    }
+
+    //UPDATE
+    if (existingLab.length > 0) {
+      const { error: updateError } = await supabase
+        .from("labcourse_details")
+        .update({
+          description: description || null,
+        })
+        .eq("course_name", courseName)
+        .eq("degree", degree)
+        .eq("department", department);
+
+      if (updateError) throw updateError;
+    } 
+    //INSERT
+    else {
+      const { error: insertError } = await supabase
+        .from("labcourse_details")
+        .insert({
+          course_name: courseName,
+          degree: degree,
+          department: department,
+          description: description || null,
+        });
+
+      if (insertError) throw insertError;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ Server Error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 module.exports = {
   updateCourseDetails,
+  updateLabCourseDetails,
   getCourse,
   getCourseDetails,
   addMapping,
