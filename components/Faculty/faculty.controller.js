@@ -284,6 +284,37 @@ const getCourseDetails = async (req, res) => {
       });
     }
 
+    const { data: labData, error: labError } = await supabase
+    .from("labcourse_details")
+    .select("description")
+    .eq("course_name", courseName)
+    .eq("degree", degree)
+    .eq("department", department)
+    .maybeSingle();
+  
+    if (labError) throw labError;
+
+    // ✅ IF LAB COURSE → return early
+    if (labData) {
+      // Fetch references (same table as theory)
+      const { data: references, error: referencesError } = await supabase
+        .from("refs")
+        .select("*")
+        .eq("course_name", courseName)
+        .eq("degree", degree)
+        .eq("department", department);
+    
+      if (referencesError) throw referencesError;
+    
+      return res.json({
+        success: true,
+        courseDetails: {
+          description: labData.description || "",
+          references: references || [],
+        },
+      });
+    }
+    
     // Fetch course details using composite key
     const { data: courseDetails, error: courseDetailsError } = await supabase
       .from("course_details")
@@ -496,9 +527,10 @@ const updateLabCourseDetails = async (req, res) => {
       degree,
       department,
       description,
+      references,
     } = req.body;
 
-    //Check if record exists
+    // Check if record exists
     const { data: existingLab, error: fetchError } = await supabase
       .from("labcourse_details")
       .select("course_name")
@@ -508,13 +540,11 @@ const updateLabCourseDetails = async (req, res) => {
 
     if (fetchError) {
       console.error("❌ Fetch error:", fetchError);
-      return res
-        .status(500)
-        .json({ success: false, error: fetchError.message });
+      return res.status(500).json({ success: false, error: fetchError.message });
     }
 
-    //UPDATE
-    if (existingLab.length > 0) {
+    // UPDATE
+    if (existingLab && existingLab.length > 0) {
       const { error: updateError } = await supabase
         .from("labcourse_details")
         .update({
@@ -526,7 +556,7 @@ const updateLabCourseDetails = async (req, res) => {
 
       if (updateError) throw updateError;
     } 
-    //INSERT
+    // INSERT
     else {
       const { error: insertError } = await supabase
         .from("labcourse_details")
@@ -540,7 +570,38 @@ const updateLabCourseDetails = async (req, res) => {
       if (insertError) throw insertError;
     }
 
+    // ✅ ALWAYS delete old references
+    const { error: deleteError } = await supabase
+      .from("refs")
+      .delete()
+      .eq("course_name", courseName)
+      .eq("degree", degree)
+      .eq("department", department);
+
+    if (deleteError) throw deleteError;
+
+    // ✅ Insert only if new references exist
+    if (references && references.length > 0) {
+      const formattedRefs = references.map((ref) => ({
+        course_name: courseName,
+        degree: degree,
+        department: department,
+        title: ref.title || "",
+        author: ref.author || "",
+        publisher: ref.publisher || "",
+        place: ref.place || "",
+        year: ref.year || "",
+      }));
+
+      const { error: insertRefError } = await supabase
+        .from("refs")
+        .insert(formattedRefs);
+
+      if (insertRefError) throw insertRefError;
+    }
+
     res.json({ success: true });
+
   } catch (err) {
     console.error("❌ Server Error:", err);
     res.status(500).json({ success: false, error: err.message });
